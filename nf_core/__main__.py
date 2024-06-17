@@ -1288,7 +1288,10 @@ def test_module(ctx, tool, dir, no_prompts, update, once, profile):
     is_flag=True,
     help="Fix the module version if a newer version is available",
 )
-def modules_lint(ctx, tool, dir, registry, key, all, fail_warned, local, passed, sort_by, fix_version):
+@click.option(
+    "--update-meta-yml", is_flag=True, help="Update the meta.yml file with the correct format of input and outputs"
+)
+def modules_lint(ctx, tool, dir, registry, key, all, fail_warned, local, passed, sort_by, fix_version, update_meta_yml):
     """
     Lint one or more modules in a directory.
 
@@ -1305,6 +1308,7 @@ def modules_lint(ctx, tool, dir, registry, key, all, fail_warned, local, passed,
         module_lint = ModuleLint(
             dir,
             fail_warned=fail_warned,
+            update_meta_yml=update_meta_yml,
             registry=ctx.params["registry"],
             remote_url=ctx.obj["modules_repo_url"],
             branch=ctx.obj["modules_repo_branch"],
@@ -1325,9 +1329,11 @@ def modules_lint(ctx, tool, dir, registry, key, all, fail_warned, local, passed,
         if len(module_lint.failed) > 0:
             sys.exit(1)
     except LintExceptionError as e:
+        raise
         log.error(e)
         sys.exit(1)
     except (UserWarning, LookupError) as e:
+        raise
         log.critical(e)
         sys.exit(1)
 
