@@ -24,3 +24,4 @@ tabulate
 textual>=0.63.1
 trogon
 pdiff
+ruamel
