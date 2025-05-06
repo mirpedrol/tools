@@ -7,6 +7,7 @@ import questionary
 import requests
 import rich.prompt
 import ruamel.yaml
+from pydantic import BaseModel, ConfigDict
 
 import nf_core.utils
 from nf_core.modules.modules_repo import ModulesRepo
@@ -20,6 +21,29 @@ ruamel.yaml.representer.RoundTripRepresenter.ignore_aliases = (
 yaml = ruamel.yaml.YAML()
 yaml.preserve_quotes = True
 yaml.indent(mapping=2, sequence=2, offset=0)
+
+
+# Pydantic models
+class ModuleMetaYml(BaseModel):
+    name: str
+    description: str
+    keywords: list[str]
+    tools: list[dict]
+    input: list[Union[dict, list[dict]]]
+    output: dict[str, Union[list, dict]]
+    authors: list[str]
+    maintainers: list[str]
+
+
+class VersionsYml(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    type: str = "file"
+    description: str = "File containing software versions"
+    pattern: str = "versions.yml"
+    ontologies: list[ruamel.yaml.comments.CommentedMap] = [
+        ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3750"})
+    ]
 
 
 def get_repo_info(directory: Path, use_prompt: Optional[bool] = True) -> Tuple[Path, Optional[str], str]:

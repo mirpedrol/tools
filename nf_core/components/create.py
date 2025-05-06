@@ -21,7 +21,12 @@ from packaging.version import parse as parse_version
 import nf_core
 import nf_core.utils
 from nf_core.components.components_command import ComponentCommand
-from nf_core.components.components_utils import get_biotools_id, get_biotools_response, get_channel_info_from_biotools
+from nf_core.components.components_utils import (
+    VersionsYml,
+    get_biotools_id,
+    get_biotools_response,
+    get_channel_info_from_biotools,
+)
 from nf_core.pipelines.lint_utils import run_prettier_on_file
 
 log = logging.getLogger(__name__)
@@ -529,18 +534,7 @@ class ComponentCreate(ComponentCommand):
             meta_yml: ruamel.yaml.comments.CommentedMap = yaml.load(fh)
 
         versions: dict[str, list[dict[str, dict]]] = {
-            "versions": [
-                {
-                    "versions.yml": {
-                        "type": "file",
-                        "description": "File containing software versions",
-                        "pattern": "versions.yml",
-                        "ontologies": [
-                            ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3750"})
-                        ],
-                    }
-                }
-            ]
+            "versions": [{"versions.yml": ruamel.yaml.comments.CommentedMap(VersionsYml().model_dump())}]
         }
         versions["versions"][0]["versions.yml"]["ontologies"][0].yaml_add_eol_comment("YAML", "edam")
 
