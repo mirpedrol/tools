@@ -41,9 +41,18 @@ class VersionsYml(BaseModel):
     type: str = "file"
     description: str = "File containing software versions"
     pattern: str = "versions.yml"
-    ontologies: list[ruamel.yaml.comments.CommentedMap] = [
+    ontologies: List[Union[ruamel.yaml.comments.CommentedMap, Dict]] = [
         ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3750"})
     ]
+
+
+class MetaYamlFile(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    type: str = "file"
+    description: str = "file"
+    pattern: str = ""
+    ontologies: List[Union[ruamel.yaml.comments.CommentedMap, Dict]] = []
 
 
 def get_repo_info(directory: Path, use_prompt: Optional[bool] = True) -> Tuple[Path, Optional[str], str]:

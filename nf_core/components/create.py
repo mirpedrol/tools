@@ -22,6 +22,7 @@ import nf_core
 import nf_core.utils
 from nf_core.components.components_command import ComponentCommand
 from nf_core.components.components_utils import (
+    MetaYamlFile,
     VersionsYml,
     get_biotools_id,
     get_biotools_response,
@@ -533,9 +534,10 @@ class ComponentCreate(ComponentCommand):
         with open(self.file_paths["meta.yml"]) as fh:
             meta_yml: ruamel.yaml.comments.CommentedMap = yaml.load(fh)
 
-        versions: dict[str, list[dict[str, dict]]] = {
-            "versions": [{"versions.yml": ruamel.yaml.comments.CommentedMap(VersionsYml().model_dump())}]
-        }
+        versions: dict[str, list[dict[str, dict]]] = {"versions": [{"versions.yml": VersionsYml().model_dump()}]}
+        versions["versions"][0]["versions.yml"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
+            versions["versions"][0]["versions.yml"]["ontologies"][0]
+        )
         versions["versions"][0]["versions.yml"]["ontologies"][0].yaml_add_eol_comment("YAML", "edam")
 
         if self.not_empty_template:
@@ -556,16 +558,17 @@ class ComponentCreate(ComponentCommand):
                 inputs_array: list[Union[dict, list[dict]]] = []
                 for i, (input_name, ontologies) in enumerate(self.inputs.items()):
                     channel_entry: dict[str, dict] = {
-                        input_name: {
-                            "type": "file",
-                            "description": f"{input_name} file",
-                            "pattern": f'"*.{",".join(ontologies[2])}"',
-                            "ontologies": [
-                                ruamel.yaml.comments.CommentedMap({"edam": f"{ont_id}"}) for ont_id in ontologies[0]
-                            ],
-                        }
+                        input_name: MetaYamlFile(
+                            type="file",
+                            description=f"{input_name} file",
+                            pattern=f'"*.{",".join(ontologies[2])}"',
+                            ontologies=[{"edam": f"{ont_id}"} for ont_id in ontologies[0]],
+                        )
                     }
                     for j, ont_desc in enumerate(ontologies[1]):
+                        channel_entry[input_name]["ontologies"][j] = ruamel.yaml.comments.CommentedMap(
+                            channel_entry[input_name]["ontologies"][j]
+                        )
                         channel_entry[input_name]["ontologies"][j].yaml_add_eol_comment(ont_desc, "edam")
                     if self.has_meta:
                         meta_suffix = str(i + 1) if i > 0 else ""
@@ -585,18 +588,27 @@ class ComponentCreate(ComponentCommand):
             elif not self.has_meta:
                 meta_yml["input"] = [
                     {
-                        "bam": {
-                            "type": "file",
-                            "description": "Sorted BAM/CRAM/SAM file",
-                            "pattern": "*.{bam,cram,sam}",
-                            "ontologies": [
-                                ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_2572"}),
-                                ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_2573"}),
-                                ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3462"}),
+                        "bam": MetaYamlFile(
+                            type="file",
+                            description="Sorted BAM/CRAM/SAM file",
+                            pattern="*.{bam,cram,sam}",
+                            ontologies=[
+                                {"edam": "http://edamontology.org/format_2572"},
+                                {"edam": "http://edamontology.org/format_2573"},
+                                {"edam": "http://edamontology.org/format_3462"},
                             ],
-                        }
+                        )
                     }
                 ]
+                meta_yml["input"][0]["bam"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["input"][0]["bam"]["ontologies"][0]
+                )
+                meta_yml["input"][0]["bam"]["ontologies"][1] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["input"][0]["bam"]["ontologies"][1]
+                )
+                meta_yml["input"][0]["bam"]["ontologies"][2] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["input"][0]["bam"]["ontologies"][2]
+                )
                 meta_yml["input"][0]["bam"]["ontologies"][0].yaml_add_eol_comment("BAM", "edam")
                 meta_yml["input"][0]["bam"]["ontologies"][1].yaml_add_eol_comment("CRAM", "edam")
                 meta_yml["input"][0]["bam"]["ontologies"][2].yaml_add_eol_comment("SAM", "edam")
@@ -618,16 +630,17 @@ class ComponentCreate(ComponentCommand):
                         )
                     pattern = f'"*.{",".join(ontologies[2])}"'
                     file_entry: dict[str, dict] = {
-                        pattern: {
-                            "type": "file",
-                            "description": f"{output_name} file",
-                            "pattern": pattern,
-                            "ontologies": [
-                                ruamel.yaml.comments.CommentedMap({"edam": f"{ont_id}"}) for ont_id in ontologies[0]
-                            ],
-                        }
+                        pattern: MetaYamlFile(
+                            type="file",
+                            description=f"{output_name} file",
+                            pattern=pattern,
+                            ontologies=[{"edam": f"{ont_id}"} for ont_id in ontologies[0]],
+                        ).model_dump()
                     }
                     for j, ont_desc in enumerate(ontologies[1]):
+                        file_entry[pattern]["ontologies"][j] = ruamel.yaml.comments.CommentedMap(
+                            file_entry[pattern]["ontologies"][j]
+                        )
                         file_entry[pattern]["ontologies"][j].yaml_add_eol_comment(ont_desc, "edam")
                     if self.has_meta:
                         if isinstance(channel_contents[0], list):  # for mypy
@@ -644,19 +657,30 @@ class ComponentCreate(ComponentCommand):
                 meta_yml["output"] = {
                     "bam": [
                         {
-                            "*.bam": {
-                                "type": "file",
-                                "description": "Sorted BAM/CRAM/SAM file",
-                                "pattern": '"*.{bam,cram,sam}"',
-                                "ontologies": [
-                                    ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_2572"}),
-                                    ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_2573"}),
-                                    ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3462"}),
-                                ],
-                            }
+                            "*.bam": MetaYamlFile(
+                                {
+                                    "type": "file",
+                                    "description": "Sorted BAM/CRAM/SAM file",
+                                    "pattern": '"*.{bam,cram,sam}"',
+                                    "ontologies": [
+                                        {"edam": "http://edamontology.org/format_2572"},
+                                        {"edam": "http://edamontology.org/format_2573"},
+                                        {"edam": "http://edamontology.org/format_3462"},
+                                    ],
+                                }
+                            )
                         }
                     ]
                 }
+                meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][0]
+                )
+                meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][1] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][1]
+                )
+                meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][2] = ruamel.yaml.comments.CommentedMap(
+                    meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][2]
+                )
                 meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][0].yaml_add_eol_comment("BAM", "edam")
                 meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][1].yaml_add_eol_comment("CRAM", "edam")
                 meta_yml["output"]["bam"][0]["*.bam"]["ontologies"][2].yaml_add_eol_comment("SAM", "edam")
