@@ -1,13 +1,15 @@
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 import questionary
 import requests
 import rich.prompt
 import ruamel.yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, GetCoreSchemaHandler, GetJsonSchemaHandler
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema
 
 import nf_core.utils
 from nf_core.modules.modules_repo import ModulesRepo
@@ -23,8 +25,61 @@ yaml.preserve_quotes = True
 yaml.indent(mapping=2, sequence=2, offset=0)
 
 
+class CommentedMapPydanticAnnotation:
+    """Class to validate ruamel CommentedMap objects with Pydantic"""
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        """
+        Return a pydantic_core.CoreSchema that behaves in the following ways:
+
+        * dictionaries will be parsed as `CommentedMap` instances
+        * `CommentedMap` instances will be parsed as `CommentedMap` instances
+        * Nothing else will pass validation
+        """
+
+        def validate_from_dict(value: int) -> ruamel.yaml.comments.CommentedMap:
+            result = ruamel.yaml.comments.CommentedMap(value)
+            return result
+
+        from_dict_schema = core_schema.chain_schema(
+            [
+                core_schema.typed_dict_schema({}),
+                core_schema.no_info_plain_validator_function(validate_from_dict),
+            ]
+        )
+
+        return core_schema.json_or_python_schema(
+            json_schema=from_dict_schema,
+            python_schema=core_schema.union_schema(
+                [
+                    core_schema.is_instance_schema(ruamel.yaml.comments.CommentedMap),
+                    from_dict_schema,
+                ]
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda instance: instance),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        # Use the same schema that would be used for `dict`
+        return handler(core_schema.typed_dict_schema())
+
+
+# `Annotated` wrapper that will be used as the annotation for fields on `BaseModel`s, etc.
+PydanticCommentedMap = Annotated[ruamel.yaml.comments.CommentedMap, CommentedMapPydanticAnnotation]
+
+
 # Pydantic models
 class ModuleMetaYml(BaseModel):
+    """Pydantic model for modules `meta.yml` file"""
+
     name: str
     description: str
     keywords: list[str]
@@ -36,23 +91,21 @@ class ModuleMetaYml(BaseModel):
 
 
 class VersionsYml(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Pydantic model for the entry of `versions.yml` file in the modules `meta.yml` file"""
 
     type: str = "file"
     description: str = "File containing software versions"
     pattern: str = "versions.yml"
-    ontologies: List[Union[ruamel.yaml.comments.CommentedMap, Dict]] = [
-        ruamel.yaml.comments.CommentedMap({"edam": "http://edamontology.org/format_3750"})
-    ]
+    ontologies: List[PydanticCommentedMap] = [PydanticCommentedMap({"edam": "http://edamontology.org/format_3750"})]
 
 
 class MetaYamlFile(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Pydantic model for any *file* entry in teh modules `meta.yml` file"""
 
     type: str = "file"
     description: str = "file"
     pattern: str = ""
-    ontologies: List[Union[ruamel.yaml.comments.CommentedMap, Dict]] = []
+    ontologies: List[PydanticCommentedMap] = [{}]
 
 
 def get_repo_info(directory: Path, use_prompt: Optional[bool] = True) -> Tuple[Path, Optional[str], str]:

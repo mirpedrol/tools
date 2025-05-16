@@ -23,6 +23,7 @@ import nf_core.utils
 from nf_core.components.components_command import ComponentCommand
 from nf_core.components.components_utils import (
     MetaYamlFile,
+    ModuleMetaYml,
     VersionsYml,
     get_biotools_id,
     get_biotools_response,
@@ -532,13 +533,12 @@ class ComponentCreate(ComponentCommand):
         Generate the meta.yml file.
         """
         with open(self.file_paths["meta.yml"]) as fh:
-            meta_yml: ruamel.yaml.comments.CommentedMap = yaml.load(fh)
+            # meta_yml: ruamel.yaml.comments.CommentedMap = yaml.load(fh)
+            # meta_yml = ModuleMetaYml(**meta_yml)
+            meta_yml: ModuleMetaYml = ModuleMetaYml(**yaml.load(fh))
 
-        versions: dict[str, list[dict[str, dict]]] = {"versions": [{"versions.yml": VersionsYml().model_dump()}]}
-        versions["versions"][0]["versions.yml"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
-            versions["versions"][0]["versions.yml"]["ontologies"][0]
-        )
-        versions["versions"][0]["versions.yml"]["ontologies"][0].yaml_add_eol_comment("YAML", "edam")
+        versions: dict[str, list[dict[str, VersionsYml]]] = {"versions": [{"versions.yml": VersionsYml()}]}
+        versions["versions"][0]["versions.yml"].ontologies[0].yaml_add_eol_comment("YAML", "edam")
 
         if self.not_empty_template:
             meta_yml.yaml_set_comment_before_after_key(
