@@ -69,7 +69,7 @@ class CommentedMapPydanticAnnotation:
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         # Use the same schema that would be used for `dict`
-        return handler(core_schema.typed_dict_schema())
+        return handler(core_schema.typed_dict_schema({}))
 
 
 # `Annotated` wrapper that will be used as the annotation for fields on `BaseModel`s, etc.

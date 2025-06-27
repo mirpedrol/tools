@@ -535,10 +535,16 @@ class ComponentCreate(ComponentCommand):
         with open(self.file_paths["meta.yml"]) as fh:
             # meta_yml: ruamel.yaml.comments.CommentedMap = yaml.load(fh)
             # meta_yml = ModuleMetaYml(**meta_yml)
-            meta_yml: ModuleMetaYml = ModuleMetaYml(**yaml.load(fh))
+            # meta_yml_validated: ModuleMetaYml = ModuleMetaYml(**yaml.load(fh))
+            # meta_yml: ruamel.yaml.comments.CommentedMap = ruamel.yaml.comments.CommentedMap(meta_yml_validated)
+            meta_yml = yaml.load(fh)
+            ModuleMetaYml(**meta_yml)  # validate
 
-        versions: dict[str, list[dict[str, VersionsYml]]] = {"versions": [{"versions.yml": VersionsYml()}]}
-        versions["versions"][0]["versions.yml"].ontologies[0].yaml_add_eol_comment("YAML", "edam")
+        versions: dict[str, list[dict[str, dict]]] = {"versions": [{"versions.yml": VersionsYml().model_dump()}]}
+        versions["versions"][0]["versions.yml"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
+            versions["versions"][0]["versions.yml"]["ontologies"][0]
+        )
+        versions["versions"][0]["versions.yml"]["ontologies"][0].yaml_add_eol_comment("YAML", "edam")
 
         if self.not_empty_template:
             meta_yml.yaml_set_comment_before_after_key(
@@ -556,14 +562,16 @@ class ComponentCreate(ComponentCommand):
 
             if hasattr(self, "inputs"):
                 inputs_array: list[Union[dict, list[dict]]] = []
+                print(f"items: {self.inputs}")
                 for i, (input_name, ontologies) in enumerate(self.inputs.items()):
+                    print(input_name, ontologies)
                     channel_entry: dict[str, dict] = {
                         input_name: MetaYamlFile(
                             type="file",
                             description=f"{input_name} file",
                             pattern=f'"*.{",".join(ontologies[2])}"',
                             ontologies=[{"edam": f"{ont_id}"} for ont_id in ontologies[0]],
-                        )
+                        ).model_dump()
                     }
                     for j, ont_desc in enumerate(ontologies[1]):
                         channel_entry[input_name]["ontologies"][j] = ruamel.yaml.comments.CommentedMap(
@@ -597,7 +605,7 @@ class ComponentCreate(ComponentCommand):
                                 {"edam": "http://edamontology.org/format_2573"},
                                 {"edam": "http://edamontology.org/format_3462"},
                             ],
-                        )
+                        ).model_dump()
                     }
                 ]
                 meta_yml["input"][0]["bam"]["ontologies"][0] = ruamel.yaml.comments.CommentedMap(
@@ -658,17 +666,15 @@ class ComponentCreate(ComponentCommand):
                     "bam": [
                         {
                             "*.bam": MetaYamlFile(
-                                {
-                                    "type": "file",
-                                    "description": "Sorted BAM/CRAM/SAM file",
-                                    "pattern": '"*.{bam,cram,sam}"',
-                                    "ontologies": [
-                                        {"edam": "http://edamontology.org/format_2572"},
-                                        {"edam": "http://edamontology.org/format_2573"},
-                                        {"edam": "http://edamontology.org/format_3462"},
-                                    ],
-                                }
-                            )
+                                type="file",
+                                description="Sorted BAM/CRAM/SAM file",
+                                pattern='"*.{bam,cram,sam}"',
+                                ontologies=[
+                                    {"edam": "http://edamontology.org/format_2572"},
+                                    {"edam": "http://edamontology.org/format_2573"},
+                                    {"edam": "http://edamontology.org/format_3462"},
+                                ],
+                            ).model_dump()
                         }
                     ]
                 }
