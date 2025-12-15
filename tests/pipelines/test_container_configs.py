@@ -41,45 +41,63 @@ class TestContainerConfigs(TestPipelines):
         # Error message should mention the minimal required version
         assert pretty_nf_version(NF_INSPECT_MIN_NF_VERSION) in str(excinfo.value)
 
-    def test_generate_default_container_config(self) -> None:
-        """Run generate_default_container_config with mocking."""
-        mock_config_bytes = b"process { withName: 'FOO_BAR' { container = 'docker://foo/bar:amd64' } }\n"
+    def test_generate_container_configs_mock(self) -> None:
+        """Run generate_container_configs with mocking to verify command execution."""
+        mock_json_output = b'{"processes": [{"name": "FOO_BAR", "container": "docker://foo/bar:amd64"}]}'
 
         with patch(
             "nf_core.pipelines.containers_utils.run_cmd",
-            return_value=(mock_config_bytes, b""),
+            return_value=(mock_json_output, b""),
         ) as mocked_run_cmd:
-            out = self.container_configs.generate_default_container_config()
+            with patch(
+                "nf_core.pipelines.containers_utils.check_nextflow_version",
+                return_value=True,
+            ):
+                # Run and expect warnings about missing meta.yml
+                self.container_configs.generate_container_configs()
 
-        expected_cmd_params = f"inspect -format config {self.pipeline_dir}"
+        expected_cmd_params = f"inspect {self.pipeline_dir} -format json"
         mocked_run_cmd.assert_called_once_with("nextflow", expected_cmd_params)
 
-        conf_path = Path(self.pipeline_dir / "conf" / "containers_docker_amd64.config")
-        assert conf_path.exists()
-        conf_path_content = conf_path.read_text(encoding="utf-8")
-        assert conf_path_content == mock_config_bytes.decode("utf-8")
-        assert out == conf_path_content
+        # Config files should be created even if meta.yml is missing
+        # (they will just be empty except for modules with meta.yml)
+        conf_dir = self.pipeline_dir / "conf"
+        assert (conf_dir / "containers_docker_amd64.config").exists()
 
-    def test_generate_default_container_config_in_pipeline(self) -> None:
-        """Run generate_default_container_config in a pipeline."""
-        out = self.container_configs.generate_default_container_config()
+    def test_generate_container_configs_in_pipeline(self) -> None:
+        """Run generate_container_configs in a pipeline and verify files are created."""
+        # Add container info to FASTQC meta.yml
+        fastqc_dir = self.pipeline_dir / "modules" / "nf-core" / "fastqc"
+        fastqc_meta_path = fastqc_dir / "meta.yml"
+
+        with fastqc_meta_path.open("r") as fh:
+            fastqc_meta = yaml.safe_load(fh)
+
+        fastqc_meta["containers"] = {
+            "docker": {
+                "linux_amd64": {
+                    "name": "quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0",
+                },
+            },
+        }
+
+        with fastqc_meta_path.open("w") as fh:
+            yaml.safe_dump(fastqc_meta, fh)
+
+        # Run the generation
+        self.container_configs.generate_container_configs()
+
+        # Verify config files are created
         conf_path = Path(self.pipeline_dir / "conf" / "containers_docker_amd64.config")
         assert conf_path.exists()
         conf_path_content = conf_path.read_text(encoding="utf-8")
-        # FASTQC and MULTIQC should be present in the config file
-        # Don't check for the exact version
+
+        # FASTQC should be present in the config file since we added meta.yml data
         assert "process { withName: 'FASTQC' { container = 'quay.io/biocontainers/fastqc" in conf_path_content
-        assert "process { withName: 'MULTIQC' { container = 'community.wave.seqera.io/library/multiqc" in out
 
-    def test_generate_all_container_configs(self) -> None:
-        """Run generate_all_container_configs in a pipeline."""
-        # Mock generate_default_container_config() output
-        default_config = (
-            "process { withName: 'FASTQC' { container = 'quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0' } }\n"
-            "process { withName: 'MULTIQC' { container = 'community.wave.seqera.io/library/multiqc:1.32--d58f60e4deb769bf' } }\n"
-        )
-
-        # TODO: Test with real meata.yml files once they are available in the template
+    def test_generate_container_configs_with_meta(self) -> None:
+        """Run generate_container_configs with meta.yml files for all platforms."""
+        # TODO: Test with real meta.yml files once they are available in the template
         # Update meta.yml files
         fastqc_dir = self.pipeline_dir / "modules" / "nf-core" / "fastqc"
         meta = {
@@ -118,7 +136,7 @@ class TestContainerConfigs(TestPipelines):
         with (fastqc_dir / "meta.yml").open("w") as fh:
             yaml.safe_dump(current_meta, fh)
 
-        self.container_configs.generate_all_container_configs(default_config)
+        self.container_configs.generate_container_configs()
 
         conf_dir = self.pipeline_dir / "conf"
         # Expected platforms and one expected container
